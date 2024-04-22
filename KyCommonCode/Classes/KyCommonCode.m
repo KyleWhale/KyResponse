@@ -28,6 +28,7 @@ static void *PlayViewStatusObservationContext = &PlayViewStatusObservationContex
 @property (nonatomic, strong) UITapGestureRecognizer *tap;
 @property (nonatomic, assign) CGPoint originalPoint;
 @property (nonatomic, assign) BOOL isDragingSlider;//是否点击了按钮的响应事件
+@property (nonatomic, assign) BOOL isSeeking;
 /**
  *  显示播放时间的UILabel
  */
@@ -666,7 +667,13 @@ static void *PlayViewStatusObservationContext = &PlayViewStatusObservationContex
  **/
 - (void)setCurrentTime:(double)time{
     dispatch_async(dispatch_get_main_queue(), ^{
-        [self.player seekToTime:CMTimeMakeWithSeconds(time, self.currentItem.currentTime.timescale)];
+        self.isSeeking = YES;
+        __weak typeof(self) weakSelf = self;
+        [self.player seekToTime:CMTimeMakeWithSeconds(time, self.currentItem.currentTime.timescale) completionHandler:^(BOOL finished) {
+            if (finished) {
+                weakSelf.isSeeking = NO;
+            }
+        }];
 
     });
 }
@@ -855,7 +862,13 @@ static void *PlayViewStatusObservationContext = &PlayViewStatusObservationContex
  **/
 - (void)updateProgress:(UISlider *)slider{
     self.isDragingSlider = NO;
-    [self.player seekToTime:CMTimeMakeWithSeconds(slider.value, _currentItem.currentTime.timescale)];
+    self.isSeeking = YES;
+    __weak typeof(self) weakSelf = self;
+    [self.player seekToTime:CMTimeMakeWithSeconds(slider.value, _currentItem.currentTime.timescale) completionHandler:^(BOOL finished) {
+        if (finished) {
+            weakSelf.isSeeking = NO;
+        }
+    }];
 
 }
 /**
@@ -865,8 +878,13 @@ static void *PlayViewStatusObservationContext = &PlayViewStatusObservationContex
     CGPoint touchLocation = [sender locationInView:self.progressSlider];
     CGFloat value = (self.progressSlider.maximumValue - self.progressSlider.minimumValue) * (touchLocation.x/self.progressSlider.frame.size.width);
     [self.progressSlider setValue:value animated:YES];
-
-    [self.player seekToTime:CMTimeMakeWithSeconds(self.progressSlider.value, self.currentItem.currentTime.timescale)];
+    self.isSeeking = YES;
+    __weak typeof(self) weakSelf = self;
+    [self.player seekToTime:CMTimeMakeWithSeconds(self.progressSlider.value, self.currentItem.currentTime.timescale) completionHandler:^(BOOL finished) {
+        if (finished) {
+            weakSelf.isSeeking = NO;
+        }
+    }];
     if (self.player.rate != 1.f) {
         if ([self currentTime] == [self duration])
             [self setCurrentTime:0.f];
@@ -1159,11 +1177,15 @@ static void *PlayViewStatusObservationContext = &PlayViewStatusObservationContex
     if (self.delegate&&[self.delegate respondsToSelector:@selector(finishKyAction:)]) {
         [self.delegate finishKyAction:self];
     }
-    
+    self.isSeeking = YES;
+    __weak typeof(self) weakSelf = self;
     [self.player seekToTime:kCMTimeZero completionHandler:^(BOOL finished) {
-        [self.progressSlider setValue:0.0 animated:YES];
-        self.showPlayBtn.selected = YES;
-        self.ppBtn.selected = YES;
+        if (finished) {
+            weakSelf.isSeeking = NO;
+        }
+        [weakSelf.progressSlider setValue:0.0 animated:YES];
+        weakSelf.showPlayBtn.selected = YES;
+        weakSelf.ppBtn.selected = YES;
     }];
     [UIView animateWithDuration:0.5 animations:^{
         self.bottomView.alpha = 1.0;
@@ -1373,7 +1395,7 @@ static void *PlayViewStatusObservationContext = &PlayViewStatusObservationContex
             if (self.ppBtn.selected) { // 暂停
                 return;
             }
-            if (self.state == KYCommonCodeStatePlaying || self.state == KYCommonCodeStatusReadyToPlay) {
+            if (!self.isSeeking && (self.state == KYCommonCodeStatePlaying || self.state == KYCommonCodeStatusReadyToPlay)) {
                 _bufferCount += 1;
             }
             [self.loadingView startAnimating];
@@ -1444,12 +1466,12 @@ static void *PlayViewStatusObservationContext = &PlayViewStatusObservationContex
         if (time<=0) {
             time=0.0;
         }
-        //        int32_t timeScale = self.player.currentItem.asset.duration.timescale;
-        //currentItem.asset.duration.timescale计算的时候严重堵塞主线程，慎用
-        /* A timescale of 1 means you can only specify whole seconds to seek to. The timescale is the number of parts per second. Use 600 for video, as Apple recommends, since it is a product of the common video frame rates like 50, 60, 25 and 24 frames per second*/
-
+        self.isSeeking = YES;
+        __weak typeof(self) weakSelf = self;
         [self.player seekToTime:CMTimeMakeWithSeconds(time, _currentItem.currentTime.timescale) toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero completionHandler:^(BOOL finished) {
-
+            if (finished) {
+                weakSelf.isSeeking = NO;
+            }
         }];
     }
 }
@@ -1606,7 +1628,13 @@ static void *PlayViewStatusObservationContext = &PlayViewStatusObservationContex
         }
         
         self.progressSlider.value -= (self.firstPoint.x - self.secondPoint.x);
-        [self.player seekToTime:CMTimeMakeWithSeconds(self.progressSlider.value, self.currentItem.currentTime.timescale)];
+        self.isSeeking = YES;
+        __weak typeof(self) weakSelf = self;
+        [self.player seekToTime:CMTimeMakeWithSeconds(self.progressSlider.value, self.currentItem.currentTime.timescale) completionHandler:^(BOOL finished) {
+            if (finished) {
+                weakSelf.isSeeking = NO;
+            }
+        }];
         double time = CMTimeGetSeconds(CMTimeMakeWithSeconds(self.progressSlider.value, self.currentItem.currentTime.timescale));
         self.leftTimeLabel.text = [self convertTime:time];
         self.showTimeLabel.text = [NSString stringWithFormat:@"%@/%@",self.leftTimeLabel.text,self.rightTimeLabel.text];
