@@ -676,6 +676,7 @@ static void *PlayViewStatusObservationContext = &PlayViewStatusObservationContex
  */
 - (void)setURLString:(NSString *)URLString{
     _URLString = URLString;
+    _bufferCount = 0;
     //设置player的参数
     self.currentItem = [self getPlayItemWithURLString:URLString];
 
@@ -1339,6 +1340,7 @@ static void *PlayViewStatusObservationContext = &PlayViewStatusObservationContex
                         [self seekToTimeToPlay:self.seekTime];
                         self.seekTime = 0.00;
                     }
+                    [self.player play];
                 }
                     break;
 
@@ -1371,11 +1373,13 @@ static void *PlayViewStatusObservationContext = &PlayViewStatusObservationContex
             if (self.ppBtn.selected) { // 暂停
                 return;
             }
+            if (self.state == KYCommonCodeStatePlaying || self.state == KYCommonCodeStatusReadyToPlay) {
+                _bufferCount += 1;
+            }
             [self.loadingView startAnimating];
             // 当缓冲是空的时候
             if (self.currentItem.playbackBufferEmpty) {
                 self.state = KYCommonCodeStateBuffering;
-                [self loadedTimeRanges];
             }
         } else if ([keyPath isEqualToString:@"playbackLikelyToKeepUp"]) {
             [self.loadingView stopAnimating];
@@ -1386,19 +1390,7 @@ static void *PlayViewStatusObservationContext = &PlayViewStatusObservationContex
         }
     }
 }
-/**
- *  缓冲回调
- */
-- (void)loadedTimeRanges
-{
-    self.state = KYCommonCodeStateBuffering;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        if (self.ppBtn.selected == NO) {
-            [self play];
-        }
-        [self.loadingView stopAnimating];
-    });
-}
+
 #pragma  mark - 定时器 监听播放状态
 -(void)initTimer{
     double interval = .1f;
@@ -1414,8 +1406,7 @@ static void *PlayViewStatusObservationContext = &PlayViewStatusObservationContex
         interval = 0.5f * duration / width;
     }
     __weak typeof(self) weakSelf = self;
-    self.playbackTimeObserver =  [weakSelf.player addPeriodicTimeObserverForInterval:CMTimeMakeWithSeconds(1.0, NSEC_PER_SEC)  queue:dispatch_get_main_queue() /* If you pass NULL, the main queue is used. */
-                                                                          usingBlock:^(CMTime time){
+    self.playbackTimeObserver =  [weakSelf.player addPeriodicTimeObserverForInterval:CMTimeMakeWithSeconds(1.0, NSEC_PER_SEC)  queue:dispatch_get_main_queue() usingBlock:^(CMTime time){
         [weakSelf syncScrubber];
     }];
 }

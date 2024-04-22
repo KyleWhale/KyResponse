@@ -205,6 +205,10 @@ typedef NS_ENUM(NSInteger, CloseBtnStyle){
  *  @param progressColor
  */
 @property (nonatomic,strong)  UIColor *progressColor;
+
+// 缓冲次数 重置URL清空
+@property (nonatomic, assign, readonly) NSInteger bufferCount;
+
 /**
  *  播放
  */
